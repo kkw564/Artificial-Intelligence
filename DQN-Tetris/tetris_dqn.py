@@ -11,120 +11,99 @@ from keras.layers import Dense, Flatten
 from keras.optimizers import RMSprop
 from keras.models import Sequential
 from skimage.transform import resize
-from skimage.color import rgb2gray
 from keras.models import Sequential
-K.set_image_dim_ordering('th')
+import matplotlib.pyplot as plt
 
 EPISODE = 50000
 GAME_VELOCTY = 0.000001
 ACTION_VELCOCITY = 0.000001
 
-ret = [[0] * 8 for _ in range(20)]
-
 class DQNAgent:
     def __init__(self, action_size):
         self.render = False
         self.load_model = False
+
         # 상태와 행동의 크기 정의
-        
         self.state_size = (20, 8, 4)
-        
         self.action_size = action_size
-        
+
         # DQN 하이퍼파라미터
         self.epsilon = 1.
         self.epsilon_start, self.epsilon_end = 1.0, 0.1
         self.exploration_steps = 1000000.
-        self.epsilon_decay_step = (self.epsilon_start - self.epsilon_end) \
-                                  / self.exploration_steps
+        self.epsilon_decay_step = (self.epsilon_start - self.epsilon_end) / self.exploration_steps
+        '''
+            batch
+            전체 학습 데이터에 대해 한 번 모델을 업데이트하는 것이 아닌
+            전체 학습 데이터를 작은 단위로 쪼개서 여러 번에 걸쳐 모델을 업데이트 하는 방식
+        '''
         self.batch_size = 32
         self.train_start = 20000
         self.update_target_rate = 10000
         self.discount_factor = 0.99
+
         # 리플레이 메모리, 최대 크기 200000
         self.memory = deque(maxlen=20000)
         self.no_op_steps = 30
+
         # 모델과 타겟모델을 생성하고 타겟모델 초기화
-        
         self.model = self.build_model()
-        
         self.target_model = self.build_model()
-        
         self.update_target_model()
-
-        
         self.optimizer = self.optimizer()
-
-        
         self.avg_q_max, self.avg_loss = 0, 0
 
+        '''
         # 텐서보드 설정
         self.sess = tf.InteractiveSession()
         K.set_session(self.sess)
-        
-        
-        self.summary_placeholders, self.update_ops, self.summary_op = \
-            self.setup_summary()
+
+        self.summary_placeholders, self.update_ops, self.summary_op = self.setup_summary()
         self.summary_writer = tf.summary.FileWriter(
             'summary/breakout_dqn', self.sess.graph)
         self.sess.run(tf.global_variables_initializer())
 
         if self.load_model:
             self.model.load_weights("./save_model/breakout_dqn.h5")
+        '''
 
     # Huber Loss를 이용하기 위해 최적화 함수를 직접 정의
     def optimizer(self):
         a = K.placeholder(shape=(None,), dtype='int32')
         y = K.placeholder(shape=(None,), dtype='float32')
-        
 
         prediction = self.model.output
-        
-
         a_one_hot = K.one_hot(a, self.action_size)
-        
         q_value = K.sum(prediction * a_one_hot, axis=1)
-        
         error = K.abs(y - q_value)
-        
 
         quadratic_part = K.clip(error, 0.0, 1.0)
         linear_part = error - quadratic_part
         loss = K.mean(0.5 * K.square(quadratic_part) + linear_part)
 
-        
         # lr = 0.00025 학습속도(경사 하강법)
         optimizer = RMSprop(lr=0.001, epsilon=0.01)
-        
         updates = optimizer.get_updates(self.model.trainable_weights, [], loss)
-        
         train = K.function([self.model.input, a, y], [loss], updates=updates)
 
-        
         return train
 
     # 상태가 입력, 큐함수가 출력인 인공신경망 생성
     def build_model(self):
-        
         model = Sequential()
-        
-        
-        
-        model.add(Conv2D(32, (8, 8),  padding='same',strides=(4, 4), activation='relu',
-                         input_shape=self.state_size))
-        
-        model.add(Conv2D(64, (4, 4),  padding='same',strides=(2, 2), activation='relu'))
-        
-        model.add(Conv2D(64, (3, 3),  padding='same',strides=(1, 1), activation='relu'))
-        
+        '''
+            컨볼루션 필터의 개수는 32, 필터의 크기는 (4,4)
+            이 필터는 층으로 들어오는 이미지와 컨볼루션 연산을 할 때
+            (2,2)씩 움직이며 연산 수행
+        '''
+        model.add(Conv2D(32, (4, 4), padding='same',strides=(2, 2), activation='relu', input_shape=self.state_size))
+        model.add(Conv2D(64, (3, 3), padding='same',strides=(1, 1), activation='relu'))
+        model.add(Conv2D(64, (2, 2), padding='same',strides=(1, 1), activation='relu'))
         model.add(Flatten())
-        
         model.add(Dense(512, activation='relu'))
-        
         model.add(Dense(self.action_size))
-        
         model.summary()
-        
+
         return model
 
     # 타겟 모델을 모델의 가중치로 업데이트
@@ -196,47 +175,29 @@ class DQNAgent:
 # 학습속도를 높이기 위해 흑백화면으로 전처리
 def pre_processing(curr_map, curr_block_pos):
     
-    copy_map = copy.deepcopy(curr_map)
+    processed_observe = copy.deepcopy(curr_map)
     
     for n in curr_block_pos:
-        copy_map[n[0]][n[1]] = 1
-    
-    processed_observe = copy_map
+        processed_observe[n[0]][n[1]] = 1
+
     #processed_observe = np.uint8(resize(rgb2gray(copy_map), (20, 8), mode='constant') * 255)
-    
+
     return processed_observe
 
-    '''copy_map = copy.deepcopy(curr_map)
-    ny, nx = 4.20, 10.5
-    for n in curr_block_pos:
-        copy_map[n[0]][n[1]] = 1
-    for n in range(20):
-        for m in range(8):
-            for i in range(int(n * ny), int(n * ny + ny)):
-                for j in range(int(m * nx), int(m * nx + nx)):
-                    ret[i][j] = copy_map[n][m]
-    return ret'''
-
-
 if __name__ == "__main__":
-    
-    tetris = Env()
-    
-    agent = DQNAgent(action_size=3)
-    
+    retFile = open("./result.txt", "w")
 
+    tetris = Env()
+    agent = DQNAgent(action_size=3)
     state = pre_processing(tetris.map, tetris._get_curr_block_pos())
-    
+
     history = np.stack((state, state, state, state), axis = 2)
-    
     history = np.reshape([history], (1, 20, 8, 4))
 
-    
     start_time = time.time()
     action_time = time.time()
     global_step = 0
 
-    
     for epi in range(EPISODE):
         step = 0
         while True:
@@ -264,29 +225,43 @@ if __name__ == "__main__":
                     agent.update_target_model()
 
                 history = next_history
-
                 action_time = time.time()
 
             if end_time - start_time >= GAME_VELOCTY:
                 # game over
                 if tetris.is_game_end():
-                    '''
-                    if global_step > agent.train_start:
-                        stats = [tetris.score, agent.avg_q_max / float(global_step), global_step,
-                                 agent.avg_loss / float(global_step)]
-                        for i in range(len(stats)):
-                            agent.sess.run(agent.update_ops[i], feed_dict={
-                                agent.summary_placeholders[i]: float(stats[i])
-                            })
-                        summary_str = agent.sess.run(agent.summary_op)
-                        agent.summary_writer.add_summary(summary_str, epi + 1)
-                    '''
                     print('episode:{}, score:{}, epsilon:{}, global step:{}, avg_qmax:{}, memory:{}'.
-                          format(epi, tetris.score, agent.epsilon, global_step,
-                                 agent.avg_q_max / float(step), len(agent.memory)))
+                          format(epi, tetris.score, agent.epsilon, global_step, agent.avg_q_max / float(step), len(agent.memory)))
+
+                    retFile.write('episode:{}, score:{}, epsilon:{}, global step:{}, avg_qmax:{}, memory:{}\n'.
+                          format(epi, tetris.score, agent.epsilon, global_step, agent.avg_q_max / float(step), len(agent.memory)))
+                    
                     tetris.reset()
                     agent.avg_q_max, agent.avg_loss = 0, 0
                     break
                 else:
                     buffer = tetris.step(0)
                 start_time = time.time()
+
+    retFile.close()
+    retFile = open("./result.txt", "r")
+    for i in retFile:
+        ret = i.rstrip()
+        pos = ret.find(':')
+        comma = ret.find(',', pos)
+        episode = int(ret[pos+1:comma].strip())
+
+        pos = ret.find(':', comma)
+        comma = ret.find(',', pos)
+        if comma == -1:
+            comma = len(ret)
+        score = ret[pos+1:comma].strip()
+
+        plt.plot(episode, score, 'o')
+        #plt.plot(episode, score, 'bo')
+        #plt.pause(0.1)
+
+    plt.xticks([])
+    plt.yticks([])
+    plt.show()
+    retFile.close()
