@@ -43,7 +43,7 @@ class DQNAgent:
         self.discount_factor = 0.99
 
         # 리플레이 메모리, 최대 크기 200000
-        self.memory = deque(maxlen=20000)
+        self.memory = deque(maxlen=200000)
         self.no_op_steps = 30
 
         # 모델과 타겟모델을 생성하고 타겟모델 초기화
@@ -96,9 +96,9 @@ class DQNAgent:
             이 필터는 층으로 들어오는 이미지와 컨볼루션 연산을 할 때
             (2,2)씩 움직이며 연산 수행
         '''
-        model.add(Conv2D(32, (4, 4), padding='same',strides=(2, 2), activation='relu', input_shape=self.state_size))
-        model.add(Conv2D(64, (3, 3), padding='same',strides=(1, 1), activation='relu'))
-        model.add(Conv2D(64, (2, 2), padding='same',strides=(1, 1), activation='relu'))
+        model.add(Conv2D(32, (4, 4),strides=(1, 1), activation='relu', input_shape=self.state_size))
+        model.add(Conv2D(64, (3, 3),strides=(1, 1), activation='relu'))
+        model.add(Conv2D(64, (2, 2),strides=(1, 1), activation='relu'))
         model.add(Flatten())
         model.add(Dense(512, activation='relu'))
         model.add(Dense(self.action_size))
