@@ -14,9 +14,11 @@ from skimage.transform import resize
 from keras.models import Sequential
 import matplotlib.pyplot as plt
 
-EPISODE = 50000
+EPISODE = 8000
 GAME_VELOCTY = 0.000001
 ACTION_VELCOCITY = 0.000001
+
+ret = [[0] * 84 for _ in range(84)]
 
 class DQNAgent:
     def __init__(self, action_size):
@@ -24,7 +26,7 @@ class DQNAgent:
         self.load_model = False
 
         # 상태와 행동의 크기 정의
-        self.state_size = (20, 8, 4)
+        self.state_size = (84, 84, 4)
         self.action_size = action_size
 
         # DQN 하이퍼파라미터
@@ -42,8 +44,8 @@ class DQNAgent:
         self.update_target_rate = 10000
         self.discount_factor = 0.99
 
-        # 리플레이 메모리, 최대 크기 200000
-        self.memory = deque(maxlen=200000)
+        # 리플레이 메모리, 최대 크기 30000
+        self.memory = deque(maxlen=30000)
         self.no_op_steps = 30
 
         # 모델과 타겟모델을 생성하고 타겟모델 초기화
@@ -92,13 +94,14 @@ class DQNAgent:
     def build_model(self):
         model = Sequential()
         '''
-            컨볼루션 필터의 개수는 32, 필터의 크기는 (4,4)
-            이 필터는 층으로 들어오는 이미지와 컨볼루션 연산을 할 때
-            (2,2)씩 움직이며 연산 수행
+         컨볼루션 필터의 개수는 64, 필터의 크기는 (4,4)
+         이 필터는 층으로 들어오는 이미지와 컨볼루션 연산을 할 때
+         (2,2)씩 움직이며 연산 수행
         '''
-        model.add(Conv2D(32, (4, 4),strides=(1, 1), activation='relu', input_shape=self.state_size))
-        model.add(Conv2D(64, (3, 3),strides=(1, 1), activation='relu'))
-        model.add(Conv2D(64, (2, 2),strides=(1, 1), activation='relu'))
+        model.add(Conv2D(32, (8, 8), strides=(4, 4), activation='relu',
+                         input_shape=self.state_size))
+        model.add(Conv2D(64, (4, 4), strides=(2, 2), activation='relu'))
+        model.add(Conv2D(64, (3, 3), strides=(1, 1), activation='relu'))
         model.add(Flatten())
         model.add(Dense(512, activation='relu'))
         model.add(Dense(self.action_size))
@@ -174,15 +177,16 @@ class DQNAgent:
 
 # 학습속도를 높이기 위해 흑백화면으로 전처리
 def pre_processing(curr_map, curr_block_pos):
-    
-    processed_observe = copy.deepcopy(curr_map)
-    
+    copy_map = copy.deepcopy(curr_map)
+    ny, nx = 4.20, 10.5
     for n in curr_block_pos:
-        processed_observe[n[0]][n[1]] = 1
-
-    #processed_observe = np.uint8(resize(rgb2gray(copy_map), (20, 8), mode='constant') * 255)
-
-    return processed_observe
+        copy_map[n[0]][n[1]] = 1
+    for n in range(20):
+        for m in range(8):
+            for i in range(int(n * ny), int(n * ny + ny)):
+                for j in range(int(m * nx), int(m * nx + nx)):
+                    ret[i][j] = copy_map[n][m]
+    return ret
 
 if __name__ == "__main__":
     retFile = open("./result.txt", "w")
@@ -192,7 +196,7 @@ if __name__ == "__main__":
     state = pre_processing(tetris.map, tetris._get_curr_block_pos())
 
     history = np.stack((state, state, state, state), axis = 2)
-    history = np.reshape([history], (1, 20, 8, 4))
+    history = np.reshape([history], (1, 84, 84, 4))
 
     start_time = time.time()
     action_time = time.time()
@@ -211,7 +215,7 @@ if __name__ == "__main__":
 
                 # 다음 상태 전처리
                 next_state = pre_processing(tetris.map, tetris._get_curr_block_pos())
-                next_state = np.reshape([next_state], (1, 20, 8, 1))
+                next_state = np.reshape([next_state], (1, 84, 84, 1))
                 next_history = np.append(next_state, history[:, :, :, :3], axis=3)
 
                 agent.avg_q_max += np.amax(agent.model.predict(np.float32(history / 255.))[0])
