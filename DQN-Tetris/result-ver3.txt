@@ -1,4 +1,3 @@
-episode:0, score:6.737651200000002, epsilon:1.0, global step:152, avg_qmax:0.0005232597825038523, memory:152
 episode:1, score:7.955738880000001, epsilon:1.0, global step:320, avg_qmax:0.00047496333999268766, memory:320
 episode:2, score:5.172723840000003, epsilon:1.0, global step:434, avg_qmax:0.0005011939009771021, memory:434
 episode:3, score:7.871103360000001, epsilon:1.0, global step:602, avg_qmax:0.0003656298772078853, memory:602
